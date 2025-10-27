@@ -9,8 +9,8 @@
 #![cfg_attr(feature = "allocator_api", feature(allocator_api))]
 
 #[cfg(feature = "allocator_api")]
+pub use crate::allocator::HybridPaperValue as Hybrid;
 pub mod allocator;
-pub use crate::allocator::*;
 
 pub mod paper_client;
 pub use crate::paper_client::*;
