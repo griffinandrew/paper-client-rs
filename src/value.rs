@@ -126,58 +126,64 @@ impl fmt::Debug for PaperValue {
 use crate::allocator::HybridPaperValue as Hybrid;
 
 
+
 #[cfg(feature = "allocator_api")]
-pub struct PaperValue(Box<[u8], A: Allocator = Hybrid>);
+use std::alloc::Allocator;
+pub struct PaperValue<A: Allocator = Hybrid>(Box<[u8], A>);
+use std::mem::MaybeUninit;
+use std::ptr;
+
 
 #[cfg(feature = "allocator_api")]
 impl From<Box<[u8]>> for PaperValue {
 	fn from(value: Box<[u8]>) -> Self {
 
-		let mut new_box = Box::<[u8], Hybrid>::new_uninit_slice(value.len(), Hybrid)
-			.expect("Hybrid allocation failed")
-			.assume_init();
+		let src = value.as_ref();
+        let len = src.len();
 
-		new_box.copy_from_slice(value);
+		let mut buf: Box<[MaybeUninit<u8>], Hybrid> = unsafe {
+            Box::new_uninit_slice_in(len, Hybrid)
+        };
 
-		PaperValue(new_box)
+		unsafe {
+            // copy_nonoverlapping is more efficient when we know the memory regions don't overlap.
+            ptr::copy(src.as_ptr(), buf.as_mut_ptr().cast(), len);
+            // ptr::copy can also be used, which is safe for overlapping regions.
+        }
+
+        // SAFETY: The memory has been fully initialized by the copy.
+        let buf = unsafe { buf.assume_init() };
+
+        PaperValue(buf)
+	
 	}
 }
+
+
 
 #[cfg(feature = "allocator_api")]
 impl From<&[u8]> for PaperValue {
 	fn from(value: &[u8]) -> Self {
-		let mut new_box = Box::<[u8], Hybrid>::new_uninit_slice(value.len(), Hybrid)
-			.expect("Hybrid allocation failed")
-			.assume_init();
-
-		new_box.copy_from_slice(value);
-
-		PaperValue(new_box)
+		let vec = value.to_vec_in(Hybrid);
+        PaperValue(vec.into_boxed_slice())
 	}
 }
+
+
 
 #[cfg(feature = "allocator_api")]
 impl From<Vec<u8>> for PaperValue {
 	fn from(value: Vec<u8>) -> Self {
-		let mut new_box = Box::<[u8], Hybrid>::new_uninit_slice(value.len(), Hybrid)
-			.expect("Hybrid allocation failed")
-			.assume_init();
-
-		new_box.copy_from_slice(value);
-
-		PaperValue(new_box)
+		let vec = value.to_vec_in(Hybrid);
+		let boxed = vec.into_boxed_slice();
+		PaperValue(boxed)
 	}
 }
 
 #[cfg(feature = "allocator_api")]
 impl From<&str> for PaperValue {
 	fn from(value: &str) -> Self {
-		let bytes = value.as_bytes();
-        let mut buf = Box::<[u8], Hybrid>::new_uninit_slice(bytes.len(), Hybrid)
-            .expect("Hybrid allocation failed")
-            .assume_init();
-        buf.copy_from_slice(bytes);
-        PaperValue(buf)
+		value.as_bytes().into()
 	}
 }
 
@@ -196,7 +202,7 @@ impl From<&String> for PaperValue {
 }
 
 #[cfg(feature = "allocator_api")]
-impl From<PaperValue> for Box<[u8]> {
+impl From<PaperValue> for Box<[u8], Hybrid> {
 	fn from(value: PaperValue) -> Self {
 		value.0
 	}
@@ -234,6 +240,7 @@ impl TryFrom<PaperValue> for String {
 	}
 }
 
+
 #[cfg(feature = "allocator_api")]
 impl fmt::Debug for PaperValue {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -249,3 +256,4 @@ impl fmt::Debug for PaperValue {
 		}
 	}
 }
+
