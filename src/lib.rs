@@ -5,6 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+
+#[cfg_attr(feature = "allocator_api", feature(allocator_api))]
+
+#[cfg(feature = "allocator_api")]
+pub mod allocator;
+pub use crate::allocator::*;
+
 pub mod paper_client;
 pub use crate::paper_client::*;
 
@@ -26,3 +33,4 @@ pub use crate::value::*;
 mod arg;
 mod addr;
 mod command;
+
