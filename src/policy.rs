@@ -12,7 +12,18 @@ use std::{
 
 use crate::error::PaperClientError;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// A cache policy.
+///
+/// `Other` is the important one for this fork. The server it talks to is
+/// paper-cache-cxl, whose hybrid designs -- `lru-hybrid`, `s3-fifo-hybrid-0.1`
+/// and the rest -- are unknown here, and enumerating them would mean editing
+/// this crate every time a design is added, with STATUS silently failing to
+/// parse whenever it fell behind. Instead an unrecognized policy round-trips
+/// verbatim: the client neither validates nor interprets it, which is the
+/// server's job anyway.
+///
+/// This costs `Copy`, since the variant owns a `String`. `Clone` remains.
+#[derive(Debug, Clone, PartialEq)]
 pub enum PaperPolicy {
 	Auto,
 	Lfu,
@@ -24,6 +35,9 @@ pub enum PaperPolicy {
 	TwoQ(f64, f64),
 	Arc,
 	SThreeFifo(f64),
+
+	/// A policy this client does not know; carried through unchanged.
+	Other(String),
 }
 
 impl Display for PaperPolicy {
@@ -39,6 +53,7 @@ impl Display for PaperPolicy {
 			PaperPolicy::TwoQ(k_in, k_out) => write!(f, "2q-{k_in}-{k_out}"),
 			PaperPolicy::Arc => write!(f, "arc"),
 			PaperPolicy::SThreeFifo(ratio) => write!(f, "s3-fifo-{ratio}"),
+			PaperPolicy::Other(name) => write!(f, "{name}"),
 		}
 	}
 }
@@ -55,11 +70,17 @@ impl FromStr for PaperPolicy {
 			"sieve" => PaperPolicy::Sieve,
 			"lru" => PaperPolicy::Lru,
 			"mru" => PaperPolicy::Mru,
-			value if value.starts_with("2q-") => parse_two_q(value)?,
+			// A prefix match is not sufficient: "2q-hybrid-0.1" starts with
+			// "2q-" but its tail is not a k_in/k_out pair. Fall through to
+			// `Other` rather than rejecting -- the server understands it even
+			// though this client does not.
+			value if value.starts_with("2q-") => parse_two_q(value)
+				.unwrap_or_else(|_| PaperPolicy::Other(value.to_owned())),
 			"arc" => PaperPolicy::Arc,
-			value if value.starts_with("s3-fifo-") => parse_s_three_fifo(value)?,
+			value if value.starts_with("s3-fifo-") => parse_s_three_fifo(value)
+				.unwrap_or_else(|_| PaperPolicy::Other(value.to_owned())),
 
-			_ => return Err(PaperClientError::Internal),
+			value => PaperPolicy::Other(value.to_owned()),
 		};
 
 		Ok(policy)

@@ -33,14 +33,14 @@ pub enum Command<'a> {
 
 	Auth(&'a str),
 
-	Get(&'a str),
-	Set(&'a str, PaperValue, u32),
-	Del(&'a str),
+	Get(&'a [u8]),
+	Set(&'a [u8], PaperValue, u32),
+	Del(&'a [u8]),
 
-	Has(&'a str),
-	Peek(&'a str),
-	Ttl(&'a str, u32),
-	Size(&'a str),
+	Has(&'a [u8]),
+	Peek(&'a [u8]),
+	Ttl(&'a [u8], u32),
+	Size(&'a [u8]),
 
 	Wipe,
 
@@ -457,40 +457,40 @@ impl Command<'_> {
 
 			Command::Get(key) => SheetBuilder::new()
 				.write_u8(CommandByte::GET)
-				.write_str(key)
+				.write_buf(key)
 				.into_sheet(),
 
 			Command::Set(key, value, ttl) => SheetBuilder::new()
 				.write_u8(CommandByte::SET)
-				.write_str(key)
+				.write_buf(key)
 				.write_buf(value.into())
 				.write_u32(*ttl)
 				.into_sheet(),
 
 			Command::Del(key) => SheetBuilder::new()
 				.write_u8(CommandByte::DEL)
-				.write_str(key)
+				.write_buf(key)
 				.into_sheet(),
 
 			Command::Has(key) => SheetBuilder::new()
 				.write_u8(CommandByte::HAS)
-				.write_str(key)
+				.write_buf(key)
 				.into_sheet(),
 
 			Command::Peek(key) => SheetBuilder::new()
 				.write_u8(CommandByte::PEEK)
-				.write_str(key)
+				.write_buf(key)
 				.into_sheet(),
 
 			Command::Ttl(key, ttl) => SheetBuilder::new()
 				.write_u8(CommandByte::TTL)
-				.write_str(key)
+				.write_buf(key)
 				.write_u32(*ttl)
 				.into_sheet(),
 
 			Command::Size(key) => SheetBuilder::new()
 				.write_u8(CommandByte::SIZE)
-				.write_str(key)
+				.write_buf(key)
 				.into_sheet(),
 
 			Command::Wipe => SheetBuilder::new()

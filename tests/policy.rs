@@ -6,24 +6,22 @@ use paper_client::{PaperClient, PaperPolicy};
 use serial_test::serial;
 
 const INITIAL_POLICY: PaperPolicy = PaperPolicy::Lfu;
-const UPDATED_POLICY: PaperPolicy = PaperPolicy::Fifo;
 
 #[test]
 #[serial]
 fn policy() {
 	let mut client = common::init_client(true);
 
+	// The tiered cache fixes its design at startup, so the server refuses
+	// this rather than accepting it. Asserting the refusal still catches the
+	// failure that matters -- a server that returns ok and changes nothing.
+	let before = get_cache_policy(&mut client);
+
 	let result = client.policy(INITIAL_POLICY);
-	assert!(result.is_ok());
+	assert!(result.is_err(), "the tiered server should refuse a policy change");
 
-	let policy = get_cache_policy(&mut client);
-	assert_eq!(policy, INITIAL_POLICY);
-
-	let updated = client.policy(UPDATED_POLICY);
-	assert!(updated.is_ok());
-
-	let policy = get_cache_policy(&mut client);
-	assert_eq!(policy, UPDATED_POLICY);
+	let after = get_cache_policy(&mut client);
+	assert_eq!(after, before, "a refused policy change must not alter the policy");
 }
 
 #[cfg(feature = "tokio")]
@@ -32,17 +30,13 @@ fn policy() {
 async fn policy_async() {
 	let mut client = common::init_async_client(true).await;
 
+	let before = get_cache_policy_async(&mut client).await;
+
 	let result = client.policy(INITIAL_POLICY).await;
-	assert!(result.is_ok());
+	assert!(result.is_err(), "the tiered server should refuse a policy change");
 
-	let policy = get_cache_policy_async(&mut client).await;
-	assert_eq!(policy, INITIAL_POLICY);
-
-	let updated = client.policy(UPDATED_POLICY).await;
-	assert!(updated.is_ok());
-
-	let policy = get_cache_policy_async(&mut client).await;
-	assert_eq!(policy, UPDATED_POLICY);
+	let after = get_cache_policy_async(&mut client).await;
+	assert_eq!(after, before, "a refused policy change must not alter the policy");
 }
 
 fn get_cache_policy(client: &mut PaperClient) -> PaperPolicy {
@@ -50,7 +44,7 @@ fn get_cache_policy(client: &mut PaperClient) -> PaperPolicy {
 		.status()
 		.expect("Could not get cache status.");
 
-	*status.policy()
+	status.policy().clone()
 }
 
 async fn get_cache_policy_async(client: &mut AsyncPaperClient) -> PaperPolicy {
@@ -59,5 +53,5 @@ async fn get_cache_policy_async(client: &mut AsyncPaperClient) -> PaperPolicy {
 		.await
 		.expect("Could not get cache status.");
 
-	*status.policy()
+	status.policy().clone()
 }
